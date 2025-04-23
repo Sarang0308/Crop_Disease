@@ -7,6 +7,7 @@ import LocationSelector from "./components/LocationSelector";
 import logo from "./assets/pisheti_logo.png"; // Adjust path if needed
 
 import bgImage from './assets/bg5.avif';
+import LanguageDropdown from "./components/DropDown";
 
 
 
@@ -17,7 +18,7 @@ const App = () => {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [location, setLocation] = useState({ state: "", district: "" });
-  
+  const [selectedLanguage, setSelectedLanguage] = useState("en");
 
   const handleLocationSelect = (state, district) => {
     setLocation({ state, district });
@@ -35,7 +36,7 @@ const App = () => {
     formData.append("crop", selectedCrop);
     formData.append("state", location.state);  
     formData.append("district", location.district);
-
+    formData.append("language", selectedLanguage); // Pass the selected language
     try {
       const response = await fetch("http://localhost:8000/api/predict/", {
         method: "POST",
@@ -53,7 +54,7 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-indigo-500 to-green-400"style={{ backgroundImage: `url(${bgImage})`, backgroundSize: "cover", backgroundPosition: "center" }}>
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-indigo-500 to-green-400" style={{ backgroundImage: `url(${bgImage})`, backgroundSize: "cover", backgroundPosition: "center" }}>
       
       <img 
        src={logo} 
@@ -65,6 +66,13 @@ const App = () => {
       <h1 className="text-4xl font-bold text-orange-950 mb-3 drop-shadow-lg animate-bounce">
          Crop Disease Detection & Remedies 
       </h1>
+      
+      {/* Your other form fields */}
+      <LanguageDropdown
+        selectedLanguage={selectedLanguage}
+        onLanguageChange={setSelectedLanguage}
+      />
+      
       {/* Location Selector */}
       <LocationSelector onLocationSelect={handleLocationSelect} />
       

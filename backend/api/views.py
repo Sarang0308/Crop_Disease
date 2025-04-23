@@ -5,10 +5,13 @@ import torchvision.transforms as transforms
 from efficientnet_pytorch import EfficientNet
 from PIL import Image
 import json
+import traceback
+from PIL import ExifTags,Image
+from datetime import datetime
 import requests
 import os
 from django.conf import settings
-from rest_framework.response import Response
+from rest_framework.response import Response # type: ignore
 from rest_framework.decorators import api_view
 from django.http import JsonResponse
 
@@ -84,29 +87,100 @@ transform = transforms.Compose([
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+
 
 API_KEY=settings.GEMINI_API_KEY
-def get_weather(state, district):
+def get_image_capture_time(image_file):
+    try:
+        img = Image.open(image_file)
+        exif_data = img._getexif()
+
+        if not exif_data:
+            return None
+
+        # Reverse mapping from ExifTags
+        exif = {
+            ExifTags.TAGS.get(k): v
+            for k, v in exif_data.items()
+            if k in ExifTags.TAGS
+        }
+
+        date_str = exif.get("DateTimeOriginal")  # Most accurate
+        if date_str:
+            return datetime.strptime(date_str, "%Y:%m:%d %H:%M:%S")
+
+        # Fallbacks
+        date_str = exif.get("DateTime")
+        if date_str:
+            return datetime.strptime(date_str, "%Y:%m:%d %H:%M:%S")
+
+    except Exception as e:
+        print("EXIF read error:", e)
+    return None
+
+def get_coordinates(state, district, api_key):
+    location = f"{district},{state},IN"  # 'IN' is the country code for India
+    geo_url = f"http://api.openweathermap.org/geo/1.0/direct?q={location}&limit=1&appid={api_key}"
+    response = requests.get(geo_url)
+
+    if response.status_code == 200 and response.json():
+        data = response.json()[0]
+        return data['lat'], data['lon']
+    return None, None
+
+def translate_text(text, target_lang="hi", source_lang="auto"):
+    """
+    Translate text using Lingva Translate API.
+    :param text: Text to translate
+    :param target_lang: Target language code (e.g., 'hi' for Hindi)
+    :param source_lang: Source language code ('auto' will auto-detect)
+    :return: Translated text
+    """
+    try:
+        base_url = "https://lingva.ml/api/v1"
+        url = f"{base_url}/{source_lang}/{target_lang}/{text}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json().get("translation", text)
+        else:
+            return text  # fallback to original if error
+    except Exception as e:
+        print("Translation error:", e)
+        return text
+    
+def get_weather(state, district, timestamp=None):
     if not state or not district:
         return {"error": "State and district are required"}
 
-    api_key = settings.OPENWEATHER_API_KEY  # Store in `settings.py`
-    url = f"https://api.openweathermap.org/data/2.5/weather?q={district}&appid={api_key}&units=metric"
+    api_key = settings.OPENWEATHER_API_KEY
+    lat, lon = get_coordinates(state, district, api_key)
+    if timestamp:
+        # Use timestamp-based historical API
+        unix_time = int(timestamp.timestamp())
+        print("Unix Time:", unix_time)
+        url = f"https://api.openweathermap.org/data/2.5/onecall/timemachine?lat={{LAT}}&lon={{LON}}&dt={unix_time}&appid={api_key}&units=metric"
+        
+        # You’ll need a geocoding step to get LAT/LON from state/district
+        # Placeholder - you must implement proper geocoding
+        0  # Example: New Delhi
+        url = url.format(LAT=lat, LON=lon)
+    else:
+        # Default current weather
+        url = f"https://api.openweathermap.org/data/2.5/weather?q={district}&appid={api_key}&units=metric"
 
     response = requests.get(url)
     if response.status_code != 200:
         return {"error": "Failed to fetch weather data"}
 
     data = response.json()
-    print(data)
     weather_info = {
         "temperature": data["main"]["temp"],
         "humidity": data["main"]["humidity"],
         "condition": data["weather"][0]["description"]
     }
-    # print(weather_info)  # Debugging purposes
-    return weather_info  # ✅ Now returns a dictionary
+    return weather_info
+
 
     
 def get_remedy_from_gemini(disease, crop, confidence,state, district):
@@ -122,8 +196,9 @@ def get_remedy_from_gemini(disease, crop, confidence,state, district):
             f"Humidity: {weather_data['humidity']}%, Condition: {weather_data['condition']}."
         )
 
+
     payload = {
-        "contents": [{"parts": [{"text": f"What are the best remedies for {disease} in {crop} with given confidence score {confidence} located at {state},{district} with weather condition there is {weather_text}in 200 words and dont mention confidence score in response and give in paragraphs? "}]}],
+        "contents": [{"parts": [{"text": f"What are the best remedies for {disease} in {crop} with given confidence score {confidence} located at {state},{district} with weather condition there is {weather_text}in 200 words and dont mention confidence score in response and give in paragraphs include cultural practices also? "}]}],
         "generationConfig": {"maxOutputTokens": 200}  # Limit response length
     }
     
@@ -135,6 +210,7 @@ def get_remedy_from_gemini(disease, crop, confidence,state, district):
     else:
         return "No remedy found."
 
+
 # Example Usage
 
 # API Endpoint
@@ -144,9 +220,11 @@ def predict(request):
     crop_name = request.POST.get('crop')
     state = request.POST.get("state")  # Get state from request
     district = request.POST.get("district")
-
-    weather_data = get_weather(state, district)
-
+    target = request.POST.get("language")
+    timestamp = get_image_capture_time(image) 
+    print("Timestamp",timestamp) # <-- extract timestamp here
+    weather_data = get_weather(state, district, timestamp)
+    print("Weather Data:", weather_data)  # <-- check the weather data
     if not image or not crop_name:
         return Response({'error': 'Missing image or crop name'}, status=400)
     
@@ -166,9 +244,25 @@ def predict(request):
         confidence = F.softmax(output, dim=1)[0, crop_indices[predicted_idx]].item()
         disease_name = predicted_disease.split("_", 1)[1]
         
-        remedy = get_remedy_from_gemini(disease_name, crop_name,confidence,state,district)
+        remedy = get_remedy_from_gemini(disease_name, crop_name, confidence, state, district)
+        translated_disease = translate_text(disease_name, target)
+        translated_remedy = translate_text(remedy,target)
+        translated_weather = translate_text(f"Temperature: {weather_data['temperature']}°C, "
+                                           f"Humidity: {weather_data['humidity']}%, "
+                                           f"Condition: {weather_data['condition']}")
         
-        return Response({"crop":crop_name,"disease": disease_name, "confidence": confidence,"remedy":remedy,"weather":weather_data})
+        
+
+        return Response({
+            "crop": crop_name,
+            "disease": translated_disease,
+            "confidence": confidence,
+            "remedy": translated_remedy,
+            "weather": weather_data
+        })
+
     
     except Exception as e:
+        print("Error in /api/predict/:", str(e))
+        traceback.print_exc()
         return Response({'error': str(e)}, status=500)

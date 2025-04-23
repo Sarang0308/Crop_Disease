@@ -6,7 +6,7 @@ const RemediesDisplay = ({ remedies }) => {
       <div className="mt-6 p-6 bg-green-100 shadow-lg rounded-lg w-full">
         <h2 className="text-lg font-semibold mb-3 text-gray-800">🩺 Remedies:</h2>
         <ul className="list-disc list-inside text-gray-700">
-          {remedies.split("*").map((remedy, index) =>
+          {remedies.split(".").map((remedy, index) =>
             remedy.trim() ? (
               <li key={index} className="mb-2">
                 {remedy.includes(":") ? (

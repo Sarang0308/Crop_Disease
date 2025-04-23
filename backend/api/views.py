@@ -91,6 +91,7 @@ GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5
 
 
 API_KEY=settings.GEMINI_API_KEY
+print("API_KEY",API_KEY)
 def get_image_capture_time(image_file):
     try:
         img = Image.open(image_file)

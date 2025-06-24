@@ -31,8 +31,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 SECRET_KEY = "django-insecure-73*7uj%1p^q=ivoyemj6pt!@%i9#!h%yl!uiksq8u1l$@u%agh"
 CORS_ALLOW_ALL_ORIGINS = True
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyAcikT2KFhlcsARuomVGctsuJG_CaYM0Ws")  # Replace with your actual API key
-OPENWEATHER_API_KEY =os.getenv("OPENWEATHER_API_KEY","6ba9f10d7e0824fe03f3957e901fe614")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyDZE0I3is11cpL7XYaujbgOwv47cR_EbXg")  # Replace with your actual API key
+OPENWEATHER_API_KEY =os.getenv("OPENWEATHER_API_KEY","d73d3f63752849390d2e22c5ff305fc5")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -131,8 +131,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = "static/"
-
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
